@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
 from app.agent.service import build_agent
-from app.api import auth, chat, feedback, history
+from app.api import auth, chat, feedback, files, history
 from app.core.config import settings
 
 
@@ -38,6 +38,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(feedback.router)
 app.include_router(history.router)
+app.include_router(files.router)
 
 
 @app.get("/")

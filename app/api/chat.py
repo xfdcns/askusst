@@ -10,6 +10,7 @@ import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import ToolMessage
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -75,6 +76,8 @@ async def chat(req: Request, body: ChatIn,
         yield f"event: meta\ndata: {json.dumps({'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
 
         answer_parts: list[str] = []
+        sent_files: list[dict] = []
+        seen_ids: set[str] = set()
 
         # stream_mode="messages"：模型每吐一个字就 yield 一次
         async for msg, meta in agent.astream(
@@ -82,6 +85,32 @@ async def chat(req: Request, body: ChatIn,
             config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages",
         ):
+            # 工具节点产出：截获 get_file 返回的文件卡片，单独推 file 事件（不进正文）
+            if isinstance(msg, ToolMessage) and isinstance(msg.content, str) \
+                    and '"files"' in msg.content:
+                try:
+                    payload = json.loads(msg.content)
+                except json.JSONDecodeError:
+                    payload = {}
+                for f in payload.get("files", []):
+                    fid = str(f.get("file_id", ""))
+                    if not fid or fid in seen_ids:
+                        continue
+                    seen_ids.add(fid)
+                    card = {
+                        "file_id": fid,
+                        "name": f.get("name", fid),
+                        "type": f.get("type", "file"),
+                        "ext": f.get("ext", ""),
+                        "size": f.get("size", 0),
+                        "desc": f.get("desc", ""),
+                        "url": f.get("download_url")
+                               or f"/files/download?file_id={fid}",
+                    }
+                    sent_files.append(card)
+                    yield f"event: file\ndata: {json.dumps(card, ensure_ascii=False)}\n\n"
+                continue
+
             # 只转发"模型节点"产出的文字；工具调用过程不发给用户
             # 注意：langchain 1.x create_agent 的模型节点名是 "model" 不是 "agent"
             if meta.get("langgraph_node") == "model" \
@@ -93,6 +122,9 @@ async def chat(req: Request, body: ChatIn,
 
         # 流结束后：助手回复落库，再后台抽取长期事实（LLM 调用放线程池，不阻塞事件循环）
         full_answer = "".join(answer_parts)
+        if sent_files:
+            att = "\n".join(f"[附件] {f['name']}" for f in sent_files)
+            full_answer = (full_answer + "\n" + att).strip()
         if full_answer.strip():
             with Session(engine) as s:
                 s.add(ChatMessage(conversation_id=conversation_id,

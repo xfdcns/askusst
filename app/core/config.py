@@ -24,8 +24,15 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
 
     data_dir: str = "data/raw"
+    files_dir: str = "data/files"   # get_file 工具可下发给学生的资料文件目录
     redis_url: str = "redis://localhost:6380/0"
-    amap_key: str = ""        # 高德开放平台 Web 服务 Key（第4周天气工具）
+    amap_key: str = ""        # 历史天气工具 Key（get_weather 已下线，保留字段不影响旧 .env）
+
+    @property
+    def files_path(self) -> Path:
+        """可下发资料目录的绝对路径，锚定项目根目录。"""
+        p = Path(self.files_dir)
+        return p if p.is_absolute() else BASE_DIR / p
 
     @property
     def raw_path(self) -> Path:

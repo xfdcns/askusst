@@ -91,6 +91,22 @@
   .fb button.on { color: var(--brand); border-color: var(--brand); background: var(--brand-light); }
   .fb button:disabled { cursor: default; }
 
+  /* 文件卡片 */
+  .filecard {
+    margin-top: 8px; display: flex; align-items: center; gap: 11px;
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px;
+    background: #fafcfb; max-width: 340px; text-decoration: none; color: var(--text);
+  }
+  .filecard:hover { border-color: var(--brand); background: var(--brand-light); }
+  .filecard .fi {
+    width: 40px; height: 40px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--brand-light); font-size: 20px; overflow: hidden;
+  }
+  .filecard .fi img { width: 100%; height: 100%; object-fit: cover; }
+  .filecard .fname { font-size: 14px; font-weight: 600; word-break: break-all; }
+  .filecard .fmeta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
   .typing span {
     display: inline-block; width: 6px; height: 6px; margin-right: 3px;
     background: var(--muted); border-radius: 50%; animation: blink 1.2s infinite;
@@ -142,7 +158,7 @@
       <div class="label">历史会话</div>
     </div>
     <div class="tip">
-      可以问：培养方案、课程学分学时、教务规定、上海天气……<br>
+      可以问：培养方案、课程学分学时、教务规定，也可以直接要表格/文件……<br>
       同一话题请在一个会话内追问，它能记得上下文。
     </div>
   </div>
@@ -184,7 +200,7 @@ async function login() {
     $("app").style.display = "flex";
     $("text").focus();
     await loadConversations();
-    addAi("你好，我是问理 🤖 可以问我培养方案、课程学分、校园生活，也可以查上海天气。");
+    addAi("你好，我是问理 🤖 可以问我培养方案、课程学分、校园生活；需要表格、PDF、Excel 或图片资料，也可以直接让我发给你。");
   } catch (e) {
     $("loginErr").textContent = "连不上后端：" + e.message + "（确认 uvicorn 已在 8000 端口启动）";
   }
@@ -256,6 +272,33 @@ function addMsg(role, text, withFb = true) {
 }
 const addAi = t => addMsg("ai", t);
 const addMe = t => addMsg("me", t, false);
+
+/* ── 文件卡片 ── */
+const FILE_ICON = { pdf: "📕", word: "📘", excel: "📗", ppt: "📙", text: "📄", image: "🖼️", file: "📎" };
+function fmtSize(n) {
+  n = Number(n) || 0;
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+  if (n >= 1024) return (n / 1024).toFixed(1) + " KB";
+  return n + " B";
+}
+function addFileCard(card, aiBox) {
+  const url = API + (card.url || ("/files/download?file_id=" + encodeURIComponent(card.file_id)));
+  const a = document.createElement("a");
+  a.className = "filecard";
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  const icon = card.type === "image"
+    ? '<div class="fi"><img src="' + url + '&mode=inline" alt=""></div>'
+    : '<div class="fi">' + (FILE_ICON[card.type] || "📎") + "</div>";
+  a.innerHTML = icon +
+    "<div><div class='fname'>" + esc(card.name) + "</div>" +
+    "<div class='fmeta'>" + (card.desc ? esc(card.desc) + " · " : "") +
+    fmtSize(card.size) + " · 点击" + (card.type === "image" || card.type === "pdf" ? "查看" : "下载") + "</div></div>";
+  // 插到助手气泡所在的内容列里（气泡下方、反馈按钮上方）
+  (aiBox.querySelector(".bubble").parentElement).appendChild(a);
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+}
 
 /* ── 反馈 ── */
 async function feedback(btn, score) {
@@ -341,6 +384,8 @@ async function send() {
 
         if (event === "meta") {
           conversationId = JSON.parse(dataStr).conversation_id;
+        } else if (event === "file") {
+          try { addFileCard(JSON.parse(dataStr), aiBox); } catch (_) {}
         } else if (event === "done") {
           break;
         } else if (dataStr && dataStr !== "[DONE]") {

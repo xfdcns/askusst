@@ -1,11 +1,14 @@
 """Agent 可调用的工具集。
-- ask_knowledge：校园知识库 RAG（第2周）
-- get_weather：高德开放平台实时天气（第4周，演示第三方 API 工具封装）
+- ask_knowledge：校园知识库 RAG
+- get_file：当学生明确需要"表格/文件/表单/原图/文档原件"等资料时，
+  在资料文件库中定位文件并返回"文件卡片"（JSON）。工具不回传二进制，
+  真正的文件由服务层通过 /files/download 链接随 SSE 发给学生。
 """
-import requests
+import json
+
 from langchain_core.tools import tool
 
-from app.core.config import settings
+from app.agent.file_store import search_files
 from app.rag.qa import answer
 
 
@@ -19,41 +22,32 @@ def ask_knowledge(query: str) -> str:
 
 
 @tool
-def get_weather(city: str = "上海") -> str:
-    """查询某城市的实时天气（温度、天气现象、风向风力、湿度）。
-    用户问天气、气温、要不要带伞时调用。默认城市为上海。
-    参数 city：城市名，如"上海""北京"。"""
-    key = settings.amap_key
-    if not key or key.startswith("在此填入"):
-        return "天气服务尚未配置：请在高德开放平台申请 Web 服务 Key，填入 .env 的 AMAP_KEY。"
+def get_file(query: str) -> str:
+    """当学生需要下载/获取"文件、表格、表单、文档原件、Excel、PDF、图片"时调用本工具，
+    例如"给我培养计划表""发一份转专业申请表""有没有校历 Excel""把那张流程图发我"。
+    本工具只负责按描述找到对应资料；纯文字知识性提问（某课多少学分）请改用 ask_knowledge。
+    参数 query：学生想要的文件描述或文件名关键词，如"2025 本科培养计划表"。
+    返回：JSON。命中时含 files 列表（每项有 file_id/name/type/ext/size/desc，供你知道找到了什么；
+    注意：结果里【不含】下载链接，文件卡片由系统自动发送给学生，你无需也禁止输出任何链接），
+    未命中返回 {"files": [], "message": "..."}，此时应如实告知并建议联系教务处。"""
+    hits = search_files(query, top_k=3)
+    if not hits:
+        return json.dumps({
+            "files": [],
+            "message": "资料文件库中未找到匹配文件，不要编造文件，建议学生咨询教务处或辅导员。",
+        }, ensure_ascii=False)
 
-    try:
-        # 第一步：城市名 -> adcode（高德区划编码）
-        geo = requests.get(
-            "https://restapi.amap.com/v3/geocode/geo",
-            params={"key": key, "address": city},
-            timeout=8,
-        ).json()
-        if geo.get("status") != "1" or not geo.get("geocodes"):
-            return f"未找到城市：{city}"
-        adcode = geo["geocodes"][0]["adcode"]
-        city_name = geo["geocodes"][0].get("city") or geo["geocodes"][0].get("formatted_address", city)
-
-        # 第二步：按 adcode 查实时天气
-        wt = requests.get(
-            "https://restapi.amap.com/v3/weather/weatherInfo",
-            params={"key": key, "city": adcode, "extensions": "base"},
-            timeout=8,
-        ).json()
-        if wt.get("status") != "1" or not wt.get("lives"):
-            return f"{city} 天气查询失败"
-        live = wt["lives"][0]
-        return (f"{live.get('province', '')}{live.get('city', city_name)} "
-                f"{live.get('weather')}，气温 {live.get('temperature')}℃，"
-                f"{live.get('winddirection')}风 {live.get('windpower')} 级，"
-                f"湿度 {live.get('humidity')}%，数据更新时间 {live.get('reporttime')}")
-    except requests.RequestException as e:
-        return f"天气接口请求异常：{e}"
+    cards = []
+    for h in hits:
+        cards.append({
+            "file_id": h["file_id"],
+            "name": h["name"],
+            "type": h["type"],
+            "ext": h["ext"],
+            "size": h["size"],
+            "desc": h.get("desc", ""),
+        })
+    return json.dumps({"files": cards}, ensure_ascii=False)
 
 
-TOOLS = [ask_knowledge, get_weather]
+TOOLS = [ask_knowledge, get_file]
