@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>问理 AskUSST · 上理校园助手</title>
+<style>
+  :root {
+    --brand: #1f6f5c;
+    --brand-light: #e8f3ef;
+    --bg: #f4f6f8;
+    --bubble-ai: #ffffff;
+    --bubble-me: #1f6f5c;
+    --text: #1f2733;
+    --muted: #8a94a6;
+    --line: #e5e9ef;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh; display: flex;
+  }
+
+  /* ── 登录页 ── */
+  #login {
+    margin: auto; width: 340px; background: #fff; border-radius: 16px;
+    padding: 36px 30px; box-shadow: 0 12px 40px rgba(31,111,92,.10);
+  }
+  #login h1 { font-size: 24px; color: var(--brand); margin-bottom: 4px; }
+  #login .sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  #login input {
+    width: 100%; padding: 11px 13px; border: 1px solid var(--line);
+    border-radius: 9px; font-size: 14px; margin-bottom: 12px; outline: none;
+  }
+  #login input:focus { border-color: var(--brand); }
+  #login button, .btn {
+    width: 100%; padding: 11px; border: none; border-radius: 9px;
+    background: var(--brand); color: #fff; font-size: 15px; cursor: pointer;
+  }
+  #login button:hover { filter: brightness(1.08); }
+  #login .err { color: #d4483b; font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+  /* ── 聊天页 ── */
+  #app { display: none; width: 100%; height: 100%; }
+  .side {
+    width: 240px; background: #fff; border-right: 1px solid var(--line);
+    padding: 20px 14px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .side .logo { font-size: 19px; font-weight: 700; color: var(--brand); }
+  .side .who { font-size: 13px; color: var(--muted); }
+  .side .btn { width: auto; background: var(--brand-light); color: var(--brand);
+    font-size: 13px; padding: 9px; font-weight: 600; }
+  .convlist { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+  .convlist .label { font-size: 12px; color: var(--muted); padding: 6px 6px 2px; }
+  .conv {
+    padding: 9px 10px; border-radius: 8px; font-size: 13.5px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #3c4656;
+  }
+  .conv:hover { background: #f2f5f4; }
+  .conv.active { background: var(--brand-light); color: var(--brand); font-weight: 600; }
+  .conv .time { font-size: 11px; color: var(--muted); display: block; margin-top: 2px; }
+  .side .tip { font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+  .main { flex: 1; display: flex; flex-direction: column; height: 100%; min-width: 0; }
+  header {
+    padding: 15px 24px; background: #fff; border-bottom: 1px solid var(--line);
+    font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+  }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: #38b000; }
+
+  #msgs { flex: 1; overflow-y: auto; padding: 24px 16%; display: flex; flex-direction: column; gap: 16px; }
+  .msg { display: flex; gap: 10px; max-width: 100%; }
+  .msg.me { flex-direction: row-reverse; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; background: var(--brand-light);
+  }
+  .msg.me .avatar { background: #dcefe8; }
+  .bubble {
+    background: var(--bubble-ai); border: 1px solid var(--line); border-radius: 4px 12px 12px 12px;
+    padding: 11px 14px; font-size: 14.5px; line-height: 1.75;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.me .bubble { background: var(--bubble-me); color: #fff; border: none;
+    border-radius: 12px 4px 12px 12px; }
+  .fb { margin-top: 6px; display: none; gap: 8px; }
+  .msg.ai:last-child .fb { display: flex; }
+  .fb button { border: 1px solid var(--line); background: #fff; border-radius: 7px;
+    padding: 2px 9px; font-size: 13px; cursor: pointer; color: var(--muted); }
+  .fb button.on { color: var(--brand); border-color: var(--brand); background: var(--brand-light); }
+  .fb button:disabled { cursor: default; }
+
+  .typing span {
+    display: inline-block; width: 6px; height: 6px; margin-right: 3px;
+    background: var(--muted); border-radius: 50%; animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25 } 40% { opacity: 1 } }
+
+  .inputbar { padding: 14px 16% 20px; background: #fff; border-top: 1px solid var(--line); }
+  .inputbox { display: flex; gap: 10px; align-items: flex-end; }
+  textarea {
+    flex: 1; resize: none; height: 44px; max-height: 120px; padding: 11px 13px;
+    border: 1px solid var(--line); border-radius: 11px; font-size: 14.5px;
+    font-family: inherit; outline: none;
+  }
+  textarea:focus { border-color: var(--brand); }
+  .send {
+    height: 44px; padding: 0 22px; border: none; border-radius: 11px;
+    background: var(--brand); color: #fff; font-size: 15px; cursor: pointer;
+  }
+  .send:disabled { background: #a9c4bb; cursor: not-allowed; }
+  .hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  @media (max-width: 800px) {
+    .side { display: none; }
+    #msgs, .inputbar { padding-left: 14px; padding-right: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 登录 -->
+<div id="login">
+  <h1>问理 AskUSST</h1>
+  <div class="sub">上海理工大学校园问答助手 · 学号登录</div>
+  <input id="sid" placeholder="学号，如 2025001" autocomplete="username">
+  <input id="nick" placeholder="昵称（可选）">
+  <button onclick="login()">进入</button>
+  <div class="err" id="loginErr"></div>
+</div>
+
+<!-- 聊天 -->
+<div id="app">
+  <div class="side">
+    <div class="logo">问理 AskUSST</div>
+    <div class="who" id="whoami"></div>
+    <button class="btn" onclick="newChat()">＋ 新建会话</button>
+    <div class="convlist" id="convlist">
+      <div class="label">历史会话</div>
+    </div>
+    <div class="tip">
+      可以问：培养方案、课程学分学时、教务规定、上海天气……<br>
+      同一话题请在一个会话内追问，它能记得上下文。
+    </div>
+  </div>
+  <div class="main">
+    <header><span class="dot"></span><span id="headTitle">问理在线</span></header>
+    <div id="msgs"></div>
+    <div class="inputbar">
+      <div class="inputbox">
+        <textarea id="text" placeholder="输入你的问题，Enter 发送，Shift+Enter 换行"></textarea>
+        <button class="send" id="sendBtn" onclick="send()">发送</button>
+      </div>
+      <div class="hint">回答基于学校公开资料生成，重要事项请以教务处官方信息为准</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+let userId = null, conversationId = null, sending = false;
+
+const $ = id => document.getElementById(id);
+
+/* ── 登录 ── */
+async function login() {
+  const student_id = $("sid").value.trim();
+  const nickname = $("nick").value.trim();
+  $("loginErr").textContent = "";
+  if (!student_id) { $("loginErr").textContent = "请输入学号"; return; }
+  try {
+    const r = await fetch(API + "/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ student_id, nickname }),
+    });
+    if (!r.ok) throw new Error("登录失败 " + r.status);
+    const data = await r.json();
+    userId = data.user_id;
+    $("whoami").textContent = (data.nickname || data.student_id) + "（学号 " + data.student_id + "）";
+    $("login").style.display = "none";
+    $("app").style.display = "flex";
+    $("text").focus();
+    await loadConversations();
+    addAi("你好，我是问理 🤖 可以问我培养方案、课程学分、校园生活，也可以查上海天气。");
+  } catch (e) {
+    $("loginErr").textContent = "连不上后端：" + e.message + "（确认 uvicorn 已在 8000 端口启动）";
+  }
+}
+$("sid").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+
+/* ── 历史会话列表 ── */
+async function loadConversations(activeId) {
+  try {
+    const r = await fetch(API + "/conversations", { headers: { "X-User-Id": userId } });
+    const list = await r.json();
+    const box = $("convlist");
+    box.innerHTML = '<div class="label">历史会话</div>';
+    if (!list.length) {
+      box.innerHTML += '<div class="conv" style="cursor:default;color:var(--muted)">暂无会话</div>';
+      return;
+    }
+    for (const c of list) {
+      const d = document.createElement("div");
+      d.className = "conv" + (c.conversation_id === (activeId ?? conversationId) ? " active" : "");
+      const t = (c.created_at || "").replace("T", " ").slice(0, 16);
+      d.innerHTML = esc(c.title) + '<span class="time">' + t + "</span>";
+      d.onclick = () => openConv(c.conversation_id);
+      box.appendChild(d);
+    }
+  } catch (e) { /* 列表加载失败不阻塞聊天 */ }
+}
+
+async function openConv(id) {
+  if (sending || id === conversationId) return;
+  conversationId = id;
+  $("msgs").innerHTML = "";
+  $("headTitle").textContent = "历史会话";
+  try {
+    const r = await fetch(API + "/conversations/" + id + "/messages",
+      { headers: { "X-User-Id": userId } });
+    const msgs = await r.json();
+    for (const m of msgs) addMsg(m.role === "user" ? "me" : "ai", m.content, false);
+    if (!msgs.length) addAi("（这个会话还没有消息）");
+  } catch (e) {
+    addAi("历史消息加载失败：" + e.message);
+  }
+  await loadConversations();
+  $("text").focus();
+}
+
+/* ── 消息渲染 ── */
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function fmt(s) {
+  return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+function addMsg(role, text, withFb = true) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + (role === "me" ? "me" : "ai");
+  wrap.innerHTML =
+    '<div class="avatar">' + (role === "me" ? "🧑‍🎓" : "🤖") + "</div>" +
+    '<div><div class="bubble">' + fmt(text) + "</div>" +
+    (withFb && role === "ai"
+      ? '<div class="fb"><button onclick="feedback(this,1)">👍 有用</button>' +
+        '<button onclick="feedback(this,-1)">👎 不准</button></div>'
+      : "") +
+    "</div>";
+  $("msgs").appendChild(wrap);
+  wrap.dataset.text = text;
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+  return wrap;
+}
+const addAi = t => addMsg("ai", t);
+const addMe = t => addMsg("me", t, false);
+
+/* ── 反馈 ── */
+async function feedback(btn, score) {
+  if (!conversationId) return;
+  const box = btn.closest(".msg");
+  const question = box.previousElementSibling?.dataset.text || "";
+  const answer = box.dataset.text || "";
+  const rating = score > 0 ? "up" : "down";
+  btn.parentElement.querySelectorAll("button").forEach(b => b.disabled = true);
+  btn.classList.add("on");
+  try {
+    await fetch(API + "/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-User-Id": userId },
+      body: JSON.stringify({ conversation_id: conversationId, question, answer, rating }),
+    });
+  } catch (e) { /* 演示场景静默 */ }
+}
+
+function newChat() {
+  conversationId = null;
+  $("msgs").innerHTML = "";
+  $("headTitle").textContent = "问理在线";
+  addAi("已开启新会话。");
+  loadConversations();
+  $("text").focus();
+}
+
+/* ── 发送 + SSE 流式接收 ── */
+$("text").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("text").addEventListener("input", function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+});
+
+async function send() {
+  if (sending) return;
+  const message = $("text").value.trim();
+  if (!message) return;
+  const wasNew = conversationId === null;
+  sending = true;
+  $("sendBtn").disabled = true;
+  $("text").value = "";
+  $("text").style.height = "auto";
+  addMe(message);
+
+  const aiBox = addAi("");
+  const bubble = aiBox.querySelector(".bubble");
+  bubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+
+  let answer = "";
+
+  try {
+    // EventSource 无法带自定义请求头（X-User-Id），故用 fetch + ReadableStream 手解 SSE
+    const resp = await fetch(API + "/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-User-Id": userId },
+      body: JSON.stringify({ message, conversation_id: conversationId }),
+    });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop();   // 半包留到下一轮
+
+      for (const block of blocks) {
+        const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+        let event = "data", dataStr = "";
+        for (const line of lines) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+        }
+
+        if (event === "meta") {
+          conversationId = JSON.parse(dataStr).conversation_id;
+        } else if (event === "done") {
+          break;
+        } else if (dataStr && dataStr !== "[DONE]") {
+          answer += JSON.parse(dataStr);
+          bubble.textContent = answer;
+          $("msgs").scrollTop = $("msgs").scrollHeight;
+        }
+      }
+    }
+    if (!answer) answer = "（没有收到回答内容）";
+    bubble.innerHTML = fmt(answer);
+    aiBox.dataset.text = answer;
+    if (wasNew) {
+      $("headTitle").textContent = message.slice(0, 20);
+      await loadConversations(conversationId);   // 新会话首轮后刷新左侧列表
+    }
+  } catch (e) {
+    answer = "请求失败：" + e.message;
+    bubble.textContent = answer;
+    aiBox.dataset.text = answer;
+  } finally {
+    sending = false;
+    $("sendBtn").disabled = false;
+    $("text").focus();
+  }
+}
+</script>
+</body>
+</html>
